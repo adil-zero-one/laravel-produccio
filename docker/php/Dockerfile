@@ -1,20 +1,27 @@
-# Change php:8.5 to a valid version like 8.3 or 8.4
 FROM php:8.3-fpm-alpine
 
-# Paquets + extensions PHP necessàries per Laravel + SQLite
-RUN set -eux; \
-    apk add --no-cache --virtual .build-deps $PHPIZE_DEPS icu-dev sqlite-dev oniguruma-dev libzip-dev; \
-    apk add --no-cache icu sqlite-libs git unzip; \
-    docker-php-ext-configure intl; \
-    docker-php-ext-install -j"$(nproc)" pdo_sqlite bcmath intl mbstring opcache; \
-    docker-php-ext-enable opcache; \
-    apk del .build-deps
+RUN apk add --no-cache nginx icu sqlite-libs git unzip
 
-# Afegim Composer
+RUN apk add --no-cache --virtual .build-deps $PHPIZE_DEPS icu-dev sqlite-dev oniguruma-dev libzip-dev \
+    && docker-php-ext-configure intl \
+    && docker-php-ext-install -j"$(nproc)" pdo_sqlite bcmath intl mbstring opcache \
+    && docker-php-ext-enable opcache \
+    && apk del .build-deps
+
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
-# Usuari no root
-RUN addgroup -g 1000 laravel && adduser -G laravel -g laravel -D -u 1000 laravel
-USER laravel
+COPY . .
+
+RUN composer install --no-dev --optimize-autoloader
+
+RUN mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache
+
+COPY docker/nginx/default.conf /etc/nginx/http.d/default.conf
+
+EXPOSE 80
+
+CMD ["sh", "-c", "php-fpm -D && nginx -g 'daemon off;'"]
