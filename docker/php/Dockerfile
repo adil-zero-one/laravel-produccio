@@ -1,11 +1,12 @@
 FROM php:8.3-fpm-alpine
 
-RUN apk add --no-cache nginx icu sqlite-libs git unzip
+RUN apk add --no-cache nginx sqlite-libs
 
-RUN apk add --no-cache --virtual .build-deps $PHPIZE_DEPS icu-dev sqlite-dev oniguruma-dev libzip-dev \
-    && docker-php-ext-configure intl \
-    && docker-php-ext-install -j"$(nproc)" pdo_sqlite bcmath intl mbstring opcache \
-    && docker-php-ext-enable opcache \
+RUN apk add --no-cache --virtual .build-deps \
+    $PHPIZE_DEPS \
+    sqlite-dev \
+    oniguruma-dev \
+    && docker-php-ext-install -j2 pdo_sqlite mbstring \
     && apk del .build-deps
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -21,6 +22,8 @@ RUN mkdir -p storage/framework/cache storage/framework/sessions storage/framewor
     && chmod -R 775 storage bootstrap/cache
 
 COPY docker/nginx/default.conf /etc/nginx/http.d/default.conf
+
+RUN sed -i 's/fastcgi_pass 127.0.0.1:9000;/fastcgi_pass 127.0.0.1:9000;/' /etc/nginx/http.d/default.conf
 
 EXPOSE 80
 
